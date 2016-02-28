@@ -44,16 +44,25 @@ function ItemDAO(database) {
         */
 
         var categories = [];
-        var category = {
-            _id: "All",
-            num: 9999
-        };
 
-        categories.push(category)
+        var aggregateQuery = [{$group: {_id: "$category", num: {$sum: 1}}}, {$sort: {_id: 1}}];
 
-        // TODO-lab1A Replace all code above (in this method).
-        
-        callback(categories);
+        this.db.collection("item").aggregate(aggregateQuery).toArray(function(err, result) {
+            assert.equal(err, null);
+
+            var total = 0;
+            result.forEach(function(item) {
+                categories.push(item);
+                total += item.num;
+            });
+                
+            categories.push({
+                _id: "ALL",
+                num: total
+            });
+            
+            callback(categories);
+        });
     }
 
 
@@ -73,13 +82,21 @@ function ItemDAO(database) {
          *
          */
 
-        var pageItem = this.createDummyItem();
-        var pageItems = [];
-        for (var i=0; i<5; i++) {
-            pageItems.push(pageItem);
+        var query = {category: category};
+        if ((category.toUpperCase() === "ALL")) {
+            query = {};
         }
+        
+        var cursor = this.db.collection("item").find(query).limit(itemsPerPage).skip((page)*itemsPerPage);
 
-        // TODO-lab1B Replace all code above (in this method).
+        var pageItems = [];
+        cursor.toArray(function(err, data) {
+            assert.equal(err, null);
+            for (var item in data) {
+                pageItems.push(data[item]);
+            }
+            
+        });
 
         callback(pageItems);
     }
@@ -87,8 +104,6 @@ function ItemDAO(database) {
 
     this.getNumItems = function(category, callback) {
         "use strict";
-        
-        var numItems = 0;
 
         /*
          * TODO-lab1C
@@ -101,8 +116,16 @@ function ItemDAO(database) {
          * getNumItems() method.
          *
          */
+        var query = {category: category};
+        if ((category.toUpperCase() === "ALL")) {
+            query = {};
+        }
+
+        this.db.collection("item").find(query).count(function(err, numItems) {
+            assert.equal(err, null);
+            callback(numItems);
+        });
         
-        callback(numItems);
     }
 
 
@@ -123,14 +146,24 @@ function ItemDAO(database) {
          * You will need to create a single text index on title, slogan, and description.
          *
          */
-        
-        var item = this.createDummyItem();
-        var items = [];
-        for (var i=0; i<5; i++) {
-            items.push(item);
-        }
 
-        // TODO-lab2A Replace all code above (in this method).
+        //Creating a text index on the required fields. Doing this the first time would be enough
+        this.db.collection("item").createIndex({
+            "title": "text",
+            "slogan": "text",
+            "description": "text"
+        });
+
+        var textQuery = {$text: {$search: query}};
+        var cursor = this.db.collection("item").find(textQuery).limit(itemsPerPage).skip((page)*itemsPerPage);
+        var items = [];
+        cursor.toArray(function(err, data) {
+            assert.equal(err, null);
+            for (var item in data) {
+                items.push(data[item]);
+            }
+            
+        });
 
         callback(items);
     }
@@ -138,8 +171,6 @@ function ItemDAO(database) {
 
     this.getNumSearchItems = function(query, callback) {
         "use strict";
-
-        var numItems = 0;
         
         /*
         * TODO-lab2B
@@ -150,7 +181,11 @@ function ItemDAO(database) {
         *
         */
 
-        callback(numItems);
+        var textQuery = {$text: {$search: query}};
+        this.db.collection("item").find(textQuery).count(function(err, numItems) {
+            assert.equal(err, null);
+            callback(numItems);
+        });
     }
 
 
@@ -164,12 +199,14 @@ function ItemDAO(database) {
          * to the callback function.
          *
          */
+
+        var query = {_id: itemId};
+        this.db.collection("item").findOne(query, function(err, item) {
+            assert.equal(err, null);
+            callback(item);
+        });
+
         
-        var item = this.createDummyItem();
-
-        // TODO-lab3 Replace all code above (in this method).
-
-        callback(item);
     }
 
 
@@ -204,9 +241,12 @@ function ItemDAO(database) {
             date: Date.now()
         }
 
-        var dummyItem = this.createDummyItem();
-        dummyItem.reviews = [reviewDoc];
-        callback(dummyItem);
+        var queryDoc = {_id: itemId};
+        var updateDoc = {$push: {"reviews": reviewDoc}};
+        this.db.collection("item").updateOne(queryDoc, updateDoc, function(err, result) {
+                callback(result);
+        });
+        
     }
 
 
